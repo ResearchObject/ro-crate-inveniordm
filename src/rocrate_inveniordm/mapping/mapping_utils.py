@@ -2,6 +2,8 @@ import json
 from importlib import resources
 import rocrate_inveniordm.mapping as mapping
 
+SPDX_URI_PATTERN = r"^https?:\/\/spdx.org\/licenses\/(?P<id>[-_.a-zA-Z0-9]+\+?)$"
+
 
 class MappingException(RuntimeError):
     """Used for errors that relate to the loaded mapping."""

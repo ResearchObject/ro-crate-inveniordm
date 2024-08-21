@@ -89,6 +89,33 @@ def test_doi__none():
     assert not cf.doi(input)
 
 
+@pytest.mark.parametrize(
+    "input",
+    [
+        "https://spdx.org/licenses/CC-BY-NC-SA-4.0.html",
+        "http://spdx.org/licenses/CC-BY-NC-SA-4.0.html",
+        "https://spdx.org/licenses/CC-BY-NC-SA-4.0",
+    ],
+)
+def test_is_spdx_uri__true(input):
+    assert cf.is_spdx_uri(input)
+
+
+def test_is_spdx_uri__false():
+    input = "CC-BY-NC-SA-4.0"
+    assert not cf.is_spdx_uri(input)
+
+
+def test_is_spdx_uri__empty():
+    input = ""
+    assert not cf.is_spdx_uri(input)
+
+
+def test_is_spdx_uri__none():
+    input = None
+    assert not cf.is_spdx_uri(input)
+
+
 def test_orcid__true():
     input = "https://orcid.org/0000-0000-0000-0000"
     assert cf.orcid(input)

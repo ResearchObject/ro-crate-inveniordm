@@ -238,6 +238,12 @@
                     "from": "license[]",
                     "to": "metadata.rights[].title",
                     "onlyIf": "?is_not_uri"
+                },
+                "rights_link_mapping_spdx_id_direct": {
+                    "from": "license[]",
+                    "to": "metadata.rights[].id",
+                    "onlyIf": "?is_spdx_uri",
+                    "processing": "$spdx_id_from_uri"
                 }
             }
         },

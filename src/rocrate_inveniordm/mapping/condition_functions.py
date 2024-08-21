@@ -29,6 +29,16 @@ def orcid(value):
     return value and value.startswith("https://orcid.org/")
 
 
+def is_spdx_uri(value):
+    """Checks if a string is an SPDX license URI."""
+    from rocrate_inveniordm.mapping.mapping_utils import SPDX_URI_PATTERN
+
+    if not value:
+        return False
+
+    return re.match(SPDX_URI_PATTERN, value) is not None
+
+
 def embargoed(value):
     """
     Checks if the value is a date in the future.

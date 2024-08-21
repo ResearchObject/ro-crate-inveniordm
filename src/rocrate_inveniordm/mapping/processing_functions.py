@@ -1,3 +1,8 @@
+import re
+
+from rocrate_inveniordm.mapping.mapping_utils import SPDX_URI_PATTERN, MappingException
+
+
 def dateProcessing(value):
     from dateutil.parser import parse
 
@@ -96,3 +101,18 @@ def convert_to_iso_639_3(value):
         return None
 
     return code
+
+
+def spdx_id_from_uri(value):
+    match = re.match(SPDX_URI_PATTERN, value)
+    if match:
+        id = match.group("id")
+        if id.endswith(".html") or id.endswith(".json"):
+            id = id[:-5]
+        id = id.lower()
+        return id
+    else:
+        raise MappingException(
+            f'The URI "{value}" was detected as an SPDX URI, '
+            "but the SPDX identifier could not be extracted."
+        )
