@@ -103,6 +103,19 @@ def test_created_invenio_records(crate_name):
     else:
         assert "contributors" not in metadata
 
+    # check rights
+    if "rights" in expected_metadata:
+        assert metadata["rights"][0]["title"] == expected_metadata["rights"][0]["title"]
+        assert (
+            metadata["rights"][0]["description"]
+            == expected_metadata["rights"][0]["description"]
+        )
+        assert (
+            metadata["rights"][0]["description"]
+            == expected_metadata["rights"][0]["link"]
+        )
+
+    # check files
     if expected_json["files"]["enabled"]:
         assert len(record["files"]) != 0
         for file in record["files"]:
@@ -121,6 +134,46 @@ def test_created_invenio_records(crate_name):
         assert len(record["files"]) == 0
     assert record["state"] == "unsubmitted"
     assert record["submitted"] is False
+
+
+def test_license_found_from_spdx_id():
+    # Arrange
+    crate_name = "test-crate-spdx-license"
+    crate_path = os.path.join(TEST_DATA_FOLDER, crate_name)
+    expected_log_pattern = r"^Successfully created record (?P<id>[0-9]*)$"
+
+    # Act
+    try:
+        # note - check_output raises CalledProcessError if exit code is non-zero
+        log = check_output(
+            f"rocrate_inveniordm {crate_path}", shell=True, text=True, stderr=STDOUT
+        )
+    except CalledProcessError as e:
+        log = e.output
+    finally:
+        with open(
+            os.path.join(TEST_OUTPUT_FOLDER, f"log-upload-{crate_name}.txt"),
+            "w",
+        ) as log_file:
+            log_file.write(log)
+    match = re.search(expected_log_pattern, log, flags=re.MULTILINE)
+    record_id = match.group("id")
+
+    record = fetch_inveniordm_record(record_id)
+    metadata = record["metadata"]
+
+    print(metadata)
+
+    # Assert
+    assert "rights" in metadata
+    assert metadata["rights"][0]["title"] == "CC BY-NC-SA 4.0 International"
+    assert (
+        metadata["rights"][0]["description"]
+        == "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International"
+    )
+    assert metadata["rights"][0]["id"] == "cc-by-nc-sa-4.0"
+
+    assert metadata["rights"][0]["link"] == "https://spdx.org/licenses/CC-BY-NC-SA-4.0"
 
 
 def test_cli__zip():
