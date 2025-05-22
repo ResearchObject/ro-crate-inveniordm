@@ -37,29 +37,41 @@ def rc_get_rde(rc):
     """
 
     # Following the RO-Crate specification
-    # (https://www.researchobject.org/ro-crate/1.1/root-data-entity.html),
+    # (https://www.researchobject.org/ro-crate/specification/1.2-DRAFT/root-data-entity.html#finding-the-root-data-entity),
     # use the following algorithm to find the RDE:
     #
     # For each entity in @graph array
-    #   if the conformsTo property is a URI that starts with https://w3id.org/ro/crate/
-    #       from this entity's about object keep the @id URI as variable root
+    # .. if the @id is ro-crate-metadata.json
+    # …. from this entity’s about object, keep the @id URI as variable root
+    # .. if the @id is ro-crate-metadata.jsonld
+    # …. from this entity’s about object, keep the @id URI as variable legacyroot
     # For each entity in @graph array
-    #   if the entity has an @id URI that matches the root return it
+    # .. if the entity has an @id URI that matches a non-null root return it
+    # For each entity in @graph array
+    # .. if the entity has an @id URI that matches a non-null legacyroot return it
+    # Fail with unknown root data entity.
 
+    # Build a map of all entities using their @id as keys
+    entity_map = {e["@id"]: e for e in rc["@graph"]}
+
+    # First, try to find the root from ro-crate-metadata.json
+    metadata_entity = entity_map.get("ro-crate-metadata.json")
     root = None
-    graph = rc.get("@graph")
-    for entity in graph:
-        conformsTo = entity.get("conformsTo")
-        if (
-            conformsTo
-            and conformsTo.get("@id")
-            and conformsTo.get("@id").startswith("https://w3id.org/ro/crate/")
-        ):
-            root = entity.get("about").get("@id")
+    if metadata_entity and "about" in metadata_entity:
+        root = metadata_entity["about"]["@id"]
 
-    for entity in graph:
-        if entity.get("@id") == root:
-            return entity
+    # If root not found, try to find legacy root from ro-crate-metadata.jsonld
+    if not root:
+        legacy_metadata_entity = entity_map.get("ro-crate-metadata.jsonld")
+        if legacy_metadata_entity and "about" in legacy_metadata_entity:
+            root = legacy_metadata_entity["about"]["@id"]
+
+    # Look up the root entity using the found @id
+    if root and root in entity_map:
+        return entity_map[root]
+
+    # Fail if root entity cannot be found
+    raise ValueError("Unknown root data entity")
 
 
 def get_value_from_rc(rc, from_key, path=[]):
