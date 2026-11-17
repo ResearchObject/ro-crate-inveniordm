@@ -48,7 +48,7 @@ If you want to change your target InvenioRDM instance, you can set the environme
 
 ### General usage
 
-Run `rocrate_inveniordm <ro-crate-dir>` with `<ro-crate-dir>` being the path to the RO-Crate directory. This will upload the record (including files and metadata) as a draft to your chosen InvenioRDM instance, and save the generated DataCite metadata as `datacite-out.json` in the current directory.
+Run `rocrate_inveniordm <ro-crate-dir>` with `<ro-crate-dir>` being the path to the RO-Crate directory (or zip file, see [Uploading a zipped crate](#uploading-a-zipped-crate)). This will upload the record (including files and metadata) as a draft to your chosen InvenioRDM instance, and save the generated DataCite metadata as `datacite-out.json` in the current directory.
 
 By default, the record is not published after upload. You can publish the record through the web interface of your chosen instance, or you can instead run the same command with the `-p` option to re-upload the crate into a new record and publish it immediately.
 
@@ -61,6 +61,16 @@ rocrate_inveniordm -z test-ro-crate
 ```
 
 will result in an uploaded file called `test-ro-crate.zip`.
+
+### Uploading a zipped crate
+
+If your crate is already zipped, you can pass the zip file instead of a directory. The zip file is uploaded as is, so the `-z` option is not needed. For example,
+
+```
+rocrate_inveniordm test-ro-crate.zip
+```
+
+The `ro-crate-metadata.json` file must be at the root of the zip file, or inside a single top-level directory. The `-o` option cannot be used with a zipped crate.
 
 ### Manually verifying DataCite conversion before upload
 

@@ -8,7 +8,7 @@ import requests
 import shutil
 from subprocess import check_output, CalledProcessError, STDOUT
 
-from test.unit.utils import get_request_headers, fetch_inveniordm_record
+from test.unit.utils import get_request_headers, fetch_inveniordm_record, zip_crate
 
 CRATES = ["minimal-ro-crate", "test-ro-crate", "real-world-example", "utf-8-csv-crate"]
 TEST_DATA_FOLDER = "test/data"
@@ -154,6 +154,57 @@ def test_cli__zip():
     assert result_zip["filename"] == f"{crate_name}.zip"
     # check MD5 checksum
     with open(f"{crate_name}.zip", "rb") as local_file:
+        local_checksum = hashlib.md5(local_file.read()).hexdigest()
+    assert result_zip["checksum"] == local_checksum
+
+
+def test_cli__zipped_crate_datacite(tmp_path):
+    """Test that a zipped crate gives the same DataCite file as its directory."""
+    # Arrange
+    crate_name = "test-ro-crate"
+    zip_path = zip_crate(os.path.join(TEST_DATA_FOLDER, crate_name), tmp_path)
+    compare_path = os.path.join(TEST_DATA_FOLDER, f"datacite-out-{crate_name}.json")
+    with open(compare_path) as expected:
+        expected_json = json.load(expected)
+
+    # Act
+    # note - check_output raises CalledProcessError if exit code is non-zero
+    log = check_output(
+        f"rocrate_inveniordm {zip_path} --no-upload",
+        shell=True,
+        text=True,
+        stderr=STDOUT,
+    )
+
+    # Assert
+    assert "Created datacite-out.json, skipping upload" in log
+    with open("datacite-out.json") as output:
+        assert json.load(output) == expected_json
+
+
+@pytest.mark.needs_credentials
+def test_cli__zipped_crate(tmp_path):
+    """Test uploading an already zipped RO-Crate as is."""
+    # Arrange
+    crate_name = "test-ro-crate"
+    zip_path = zip_crate(os.path.join(TEST_DATA_FOLDER, crate_name), tmp_path)
+    expected_log_pattern = r"^Successfully created record (?P<id>[0-9]*)$"
+
+    # Act
+    # note - check_output raises CalledProcessError if exit code is non-zero
+    log = check_output(
+        f"rocrate_inveniordm {zip_path}", shell=True, text=True, stderr=STDOUT
+    )
+    match = re.search(expected_log_pattern, log, flags=re.MULTILINE)
+    record_id = match.group("id")
+
+    record = fetch_inveniordm_record(record_id)
+
+    # Assert
+    assert len(record["files"]) == 1
+    result_zip = record["files"][0]
+    assert result_zip["filename"] == f"{crate_name}.zip"
+    with open(zip_path, "rb") as local_file:
         local_checksum = hashlib.md5(local_file.read()).hexdigest()
     assert result_zip["checksum"] == local_checksum
 

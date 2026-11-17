@@ -1,5 +1,5 @@
 """
-    This script deposits a RO-Crate directory to an InvenioRDM repository.
+    This script deposits a RO-Crate directory or zip file to an InvenioRDM repository.
 
     :author: Philipp Beer
     :author: Milan Szente
@@ -13,9 +13,12 @@ import json
 import os
 import shutil
 import sys
+import zipfile
 
 import rocrate_inveniordm.mapping.converter as converter
 import rocrate_inveniordm.upload.uploader as uploader
+
+METADATA_FILE = "ro-crate-metadata.json"
 
 
 def main():
@@ -24,13 +27,13 @@ def main():
     """
 
     parser = argparse.ArgumentParser(
-        description="Takes a RO-Crate directory as input and uploads it to an "
-        "InvenioRDM repository"
+        description="Takes a RO-Crate directory or zip file as input and uploads it to "
+        "an InvenioRDM repository"
     )
 
     parser.add_argument(
         "ro_crate_directory",
-        help="Path to the RO-Crate directory to upload",
+        help="Path to the RO-Crate directory or zip file to upload",
         type=str,
         action="store",
     )
@@ -67,7 +70,8 @@ def main():
         "-z",
         "--zip",
         help="Instead of uploading all the files within the crate, create and upload a "
-        "single zip file containing the whole crate",
+        "single zip file containing the whole crate (not needed for a zipped crate, "
+        "which is always uploaded as is)",
         action="store_true",
     )
     args = parser.parse_args()
@@ -101,9 +105,11 @@ def deposit(
 ):
     """
     The main function of the script.
-    It takes a RO-Crate directory as input and uploads it to an InvenioRDM repository.
+    It takes a RO-Crate directory or zip file as input and uploads it to an InvenioRDM
+    repository.
 
-    :param ro_crate_dir: Path to the RO-Crate directory to upload.
+    :param ro_crate_dir: Path to the RO-Crate directory or zip file to upload. A zip
+        file is uploaded as is.
     :param datacite_file: Path to a DataCite metadata file which should be used for the
         upload. Skips the conversion process from RO-Crate metadata to DataCite.
         Defaults to None
@@ -119,36 +125,8 @@ def deposit(
     :return: The ID of the created record, or None if no record was created.
     """
 
-    # Get all files in RO-Crate directory and check if it is a RO-Crate directory
-    # Exclude RO-Crate metadata, and RO-Crate website files
-    all_files = []
-
-    if use_zip:
-        crate_name = os.path.basename(ro_crate_dir.strip("/"))
-        print(f"Creating zipped crate {crate_name}.zip")
-        crate_zip_path = shutil.make_archive(
-            crate_name,
-            "zip",
-            root_dir=ro_crate_dir,
-        )
-        all_files.append(crate_zip_path)
-    else:
-        for file in glob.glob(f"{ro_crate_dir}/**", recursive=True):
-            if omit_roc_files and (
-                "ro-crate-preview" in file or "ro-crate-metadata.json" in file
-            ):
-                continue
-            if os.path.isfile(file):
-                all_files.append(file)
-
-    ro_crate_metadata_file = os.path.join(ro_crate_dir, "ro-crate-metadata.json")
-
-    if not os.path.isfile(ro_crate_metadata_file):
-        print(
-            f"'{ro_crate_dir}' is not a RO-Crate directory: "
-            "'ro-crate-metadata.json' not found."
-        )
-        sys.exit()
+    ro_crate_metadata = load_crate_metadata(ro_crate_dir)
+    all_files = get_files_to_upload(ro_crate_dir, omit_roc_files, use_zip)
 
     if datacite_file:
         # skip conversion and use the provided file
@@ -156,10 +134,6 @@ def deposit(
         with open(datacite_file, "r") as f:
             data_cite_metadata = json.load(f)
     else:
-        # convert the RO-Crate metadata to DataCite
-        with open(ro_crate_metadata_file, "r") as f:
-            ro_crate_metadata = json.load(f)
-
         # if no files to upload, just set the metadata on the record
         metadata_only = False
         if len(all_files) == 0:
@@ -182,6 +156,88 @@ def deposit(
 
         print(f"Successfully created record {record_id}")
         return record_id
+
+
+def load_crate_metadata(crate_path: str) -> dict:
+    """
+    Loads the RO-Crate metadata from a RO-Crate directory or zip file.
+    Exits the program if the metadata file is not found.
+
+    :param crate_path: Path to the RO-Crate directory or zip file.
+    :return: Dictionary containing the RO-Crate metadata.
+    """
+    if os.path.isdir(crate_path):
+        metadata_file = os.path.join(crate_path, METADATA_FILE)
+        if os.path.isfile(metadata_file):
+            with open(metadata_file, "r") as f:
+                return json.load(f)
+    elif zipfile.is_zipfile(crate_path):
+        with zipfile.ZipFile(crate_path) as zf:
+            metadata_name = find_metadata_in_zip(zf.namelist())
+            if metadata_name:
+                with zf.open(metadata_name) as f:
+                    return json.load(f)
+
+    print(
+        f"'{crate_path}' is not a RO-Crate directory or zip file: "
+        f"'{METADATA_FILE}' not found."
+    )
+    sys.exit(1)
+
+
+def find_metadata_in_zip(names: list[str]) -> str | None:
+    """
+    Finds the RO-Crate metadata file in a zip file, either at the root or inside a
+    single top-level directory.
+
+    :param names: Names of all the entries in the zip file.
+    :return: The entry name of the metadata file, or None if not found.
+    """
+    if METADATA_FILE in names:
+        return METADATA_FILE
+    # ignore the folder of resource forks that macOS adds when compressing
+    top_dirs = {name.split("/")[0] for name in names if not name.startswith("__MACOSX")}
+    if len(top_dirs) == 1:
+        candidate = f"{top_dirs.pop()}/{METADATA_FILE}"
+        if candidate in names:
+            return candidate
+    return None
+
+
+def get_files_to_upload(
+    crate_path: str, omit_roc_files: bool = False, use_zip: bool = False
+) -> list[str]:
+    """
+    Lists the files to upload for a RO-Crate directory or zip file.
+    Exits the program if omit_roc_files is used with a zip file.
+
+    :param crate_path: Path to the RO-Crate directory or zip file.
+    :param omit_roc_files: Omit files named 'ro-crate-metadata.json' and
+        directories/files containing 'ro-crate-preview'. Defaults to False
+    :param use_zip: Create and return a single zip file containing the whole crate.
+        Defaults to False
+    :return: List of paths of the files to upload.
+    """
+    if os.path.isfile(crate_path):
+        # a zipped crate is uploaded as is
+        if omit_roc_files:
+            print("The --omit-roc-files option cannot be used with a zipped crate.")
+            sys.exit(1)
+        return [crate_path]
+
+    if use_zip:
+        crate_name = os.path.basename(crate_path.strip("/"))
+        print(f"Creating zipped crate {crate_name}.zip")
+        return [shutil.make_archive(crate_name, "zip", root_dir=crate_path)]
+
+    # Exclude RO-Crate metadata, and RO-Crate website files if requested
+    all_files = []
+    for file in glob.glob(f"{crate_path}/**", recursive=True):
+        if omit_roc_files and ("ro-crate-preview" in file or METADATA_FILE in file):
+            continue
+        if os.path.isfile(file):
+            all_files.append(file)
+    return all_files
 
 
 if __name__ == "__main__":

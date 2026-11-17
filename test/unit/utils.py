@@ -1,5 +1,7 @@
 import json
+import os
 import requests
+import shutil
 
 import rocrate_inveniordm.mapping.converter as converter
 import rocrate_inveniordm.upload.credentials as credentials
@@ -66,3 +68,20 @@ def fetch_inveniordm_record(record_id):
     )
     r.raise_for_status()
     return r.json()
+
+
+def zip_crate(crate_path, out_dir, top_folder=False):
+    """Zips a crate directory into out_dir, with the crate files at the root of the
+    zip, or inside a single top-level folder if top_folder is True.
+
+    :return: Path of the created zip file.
+    """
+    crate_path = os.path.normpath(crate_path)
+    crate_name = os.path.basename(crate_path)
+    if top_folder:
+        root_dir, base_dir = os.path.dirname(crate_path), crate_name
+    else:
+        root_dir, base_dir = crate_path, None
+    return shutil.make_archive(
+        os.path.join(out_dir, crate_name), "zip", root_dir=root_dir, base_dir=base_dir
+    )
