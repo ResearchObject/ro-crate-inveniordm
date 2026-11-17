@@ -16,8 +16,11 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      # report every combination instead of cancelling the rest on the first failure
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # ubuntu-latest (26.04) has no Python 3.9 in actions/setup-python
+        os: [ubuntu-24.04, macos-latest]
         python-version: ["3.9", "3.12"]
     env:
       ZENODO_SANDBOX_API_KEY: ${{secrets.ZENODO_SANDBOX_API_KEY}}
