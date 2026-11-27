@@ -6,7 +6,7 @@ Originally developed (up to [v1.0.2](https://github.com/beerphilipp/ro-crates-de
 
 ## Requirements
 
-- [`Python 3.9`](https://www.python.org/downloads/) or higher
+- [`Python 3.11`](https://www.python.org/downloads/) or higher
 
 ## Setup
 
